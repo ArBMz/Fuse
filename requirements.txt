@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+websockets
+pyautogui
+mss
+Pillow
+requests
+pydantic-settings
