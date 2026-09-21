@@ -6,3 +6,4 @@ mss
 Pillow
 requests
 pydantic-settings
+httpx

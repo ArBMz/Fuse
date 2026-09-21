@@ -3,6 +3,7 @@ import asyncio
 from typing import Optional
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from app.config import settings
+from app.agent.loop import AgentLoop
 
 router = APIRouter()
 
@@ -17,7 +18,7 @@ class WebSocketSessionManager:
         self.websocket = websocket
         self.active_task: Optional[asyncio.Task] = None
         # Will hold reference to the agent instance once initialized
-        self.agent = None
+        self.agent = AgentLoop(websocket=self.websocket)
 
     async def send_event(self, event_type: str, payload: dict):
         """Standardized helper to send structured envelopes to client."""
@@ -27,18 +28,16 @@ class WebSocketSessionManager:
         })
 
     async def start_task(self, prompt: str):
-        """Cancels any ongoing execution and spawns a new agent run task."""
-        await self.stop_task(reason="New task initiated by user.")
+            """Cancels any ongoing execution and spawns a new agent run task."""
+            await self.stop_task(reason="New task initiated by user.", notify=False)
 
-        await self.send_event("STATUS_UPDATE", {
-            "step_name": "init",
-            "message": f"Starting task using {settings.ollama_model}..."
-        })
+            await self.send_event("STATUS_UPDATE", {
+                "step_name": "init",
+                "message": f"Starting task using {settings.ollama_model}..."
+            })
 
-        # Lazy import / hook to agent loop (to be implemented in app.agent)
-        # from app.agent.loop import AgentLoop
-        # self.agent = AgentLoop(websocket=self.websocket)
-        # self.active_task = asyncio.create_task(self.agent.run(prompt))
+            # Initialize the agent loop with the current WebSocket
+            self.active_task = asyncio.create_task(self.agent.run(prompt))
 
     async def handle_auth_response(self, action_id: str, is_approved: bool):
         """Passes the authorization verdict to the agent gateway."""
@@ -47,7 +46,11 @@ class WebSocketSessionManager:
         else:
             print(f"[WS Router] Received auth response for {action_id}, but no active agent exists.")
 
-    async def stop_task(self, reason: str = "User initiated kill switch."):
+    async def stop_task(
+        self,
+        reason: str = "User initiated kill switch.",
+        notify: bool = True,
+    ):
         """Immediately halts the active background task and notifies the frontend."""
         if self.active_task and not self.active_task.done():
             self.active_task.cancel()
@@ -60,10 +63,11 @@ class WebSocketSessionManager:
         if self.agent and hasattr(self.agent, "stop"):
             await self.agent.stop()
 
-        await self.send_event("TASK_COMPLETE", {
-            "status": "aborted",
-            "message": f"Execution halted: {reason}"
-        })
+        if notify:
+            await self.send_event("TASK_COMPLETE", {
+                "status": "aborted",
+                "message": f"Execution halted: {reason}"
+            })
 
 
 @router.websocket("/ws")

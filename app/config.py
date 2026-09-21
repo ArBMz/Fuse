@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     # Gateway Settings
     require_auth_for_all: bool = False
 
-class Config:
+    class Config:
         # Tells Pydantic to look for a .env file in the root directory
         env_file = ".env"
         # Ignores extra variables in the .env file that aren't defined here

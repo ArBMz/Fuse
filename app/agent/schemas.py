@@ -5,7 +5,7 @@ OS_TOOLS = [
         "type": "function",
         "function": {
             "name": "mouse_move",
-            "description": "Moves the cursor to exact x, y screen coordinates. Always use this to hover over an element before clicking.",
+            "description": "Moves the cursor to x, y coordinates in the screenshot image. The system converts them to physical screen coordinates. Always use this to hover over an element before clicking.",
             "parameters": {
                 "type": "object",
                 "properties": {
