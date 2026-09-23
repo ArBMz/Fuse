@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Fuse Overlay</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 10px;
+            background: transparent;
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            color: #e2e8f0;
+            /* Makes the entire background act as a drag handle for the frameless window */
+            -webkit-app-region: drag; 
+        }
+
+        .widget-container {
+            background-color: rgba(26, 29, 39, 0.95);
+            border: 1px solid #3b82f6;
+            border-radius: 12px;
+            padding: 12px 16px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.85rem;
+            font-weight: bold;
+        }
+        
+        .status { color: #94a3b8; }
+
+        .input-row {
+            display: flex;
+            gap: 8px;
+        }
+
+        /* Essential: Inputs and buttons must be set to no-drag so they can be clicked */
+        input, button {
+            -webkit-app-region: no-drag;
+            border: none;
+            border-radius: 6px;
+            outline: none;
+        }
+
+        input {
+            flex-grow: 1;
+            background: #0f111a;
+            color: white;
+            padding: 8px 12px;
+            border: 1px solid #2d313f;
+        }
+
+        button {
+            padding: 8px 16px;
+            cursor: pointer;
+            font-weight: bold;
+            background: #3b82f6;
+            color: white;
+        }
+
+        .btn-mic { background: #10b981; }
+        .btn-kill { background: #ef4444; }
+        
+        .auth-panel {
+            display: none;
+            background: rgba(239, 68, 68, 0.2);
+            padding: 8px;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            justify-content: space-between;
+            align-items: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="widget-container">
+        <div class="header">
+            <span>FUSE AGENT</span>
+            <span id="status" class="status">🔴 Disconnected</span>
+        </div>
+        
+        <div class="input-row">
+            <input type="text" id="prompt" placeholder="Type or speak...">
+            <button class="btn-mic" id="btn-mic">🎤</button>
+            <button id="btn-send">Run</button>
+            <button class="btn-kill" id="btn-kill">🛑</button>
+        </div>
+
+        <div id="auth-panel" class="auth-panel">
+            <span id="auth-text">Auth required</span>
+            <div style="-webkit-app-region: no-drag;">
+                <button style="background: #10b981;" id="btn-approve">Yes</button>
+                <button style="background: #ef4444;" id="btn-deny">No</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const statusEl = document.getElementById('status');
+        const promptEl = document.getElementById('prompt');
+        const authPanel = document.getElementById('auth-panel');
+        const authText = document.getElementById('auth-text');
+        
+        let ws;
+        let currentActionId = null;
+
+        // --- WebSocket Setup ---
+        function connect() {
+            ws = new WebSocket('ws://127.0.0.1:8000/ws');
+            
+            ws.onopen = () => statusEl.innerText = '🟢 Connected';
+            ws.onclose = () => {
+                statusEl.innerText = '🔴 Disconnected';
+                setTimeout(connect, 3000); // Auto-reconnect
+            };
+            
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                
+                if (data.type === 'STATUS_UPDATE') {
+                    statusEl.innerText = `🔄 ${data.payload.step_name}`;
+                } else if (data.type === 'TASK_COMPLETE') {
+                    statusEl.innerText = `✅ ${data.payload.status}`;
+                } else if (data.type === 'AUTH_REQUIRED') {
+                    currentActionId = data.payload.action_id;
+                    authText.innerText = `Allow ${data.payload.tool_name}?`;
+                    authPanel.style.display = 'flex';
+                }
+            };
+        }
+        connect();
+
+        // --- UI Interactions ---
+        document.getElementById('btn-send').onclick = () => {
+            const text = promptEl.value.trim();
+            if (text && ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'START_TASK', payload: { prompt: text } }));
+                promptEl.value = '';
+            }
+        };
+
+        document.getElementById('btn-kill').onclick = () => {
+            ws.send(JSON.stringify({ type: 'KILL_SWITCH', payload: { reason: "UI Stop" } }));
+        };
+
+        // --- Auth Handling ---
+        const handleAuth = (isApproved) => {
+            ws.send(JSON.stringify({
+                type: 'AUTH_RESPONSE', 
+                payload: { action_id: currentActionId, is_approved: isApproved }
+            }));
+            authPanel.style.display = 'none';
+        };
+        document.getElementById('btn-approve').onclick = () => handleAuth(true);
+        document.getElementById('btn-deny').onclick = () => handleAuth(false);
+
+        // --- Web Speech API (Voice Control) ---
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (SpeechRecognition) {
+            const recognition = new SpeechRecognition();
+            recognition.continuous = false;
+            
+            recognition.onstart = () => {
+                statusEl.innerText = '🎙️ Listening...';
+                promptEl.placeholder = 'Listening...';
+            };
+            
+            recognition.onresult = (event) => {
+                const transcript = event.results[0][0].transcript;
+                promptEl.value = transcript;
+                statusEl.innerText = '🟢 Connected';
+                // Optional: Auto-send after speaking
+                // document.getElementById('btn-send').click(); 
+            };
+            
+            document.getElementById('btn-mic').onclick = () => recognition.start();
+        } else {
+            document.getElementById('btn-mic').style.display = 'none';
+        }
+    </script>
+</body>
+</html>

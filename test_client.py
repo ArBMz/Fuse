@@ -11,7 +11,7 @@ async def test_agent():
             print("🟢 Connected to Fuse Backend!")
 
             # 1. Start the task
-            prompt = "just close this vs-code window"
+            prompt = "click on the discord icon in the bottom of the screen on the toolbar and open the discord"
             start_msg = {
                 "type": "START_TASK",
                 "payload": {"prompt": prompt}

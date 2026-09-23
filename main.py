@@ -29,15 +29,15 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Fuse Vision Agent", lifespan=lifespan)
 
 # Mount the static directory so FastAPI can serve the JS, CSS, and HTML
-app.mount("/static", StaticFiles(directory="static"), name="static")
+# app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # Register the WebSocket router from the app/api module
 app.include_router(websocket_router)
 
 # Serve the main chat interface
-@app.get("/")
-async def get_index():
-    return FileResponse("static/index.html")
+# @app.get("/")
+# async def get_index():
+#     return FileResponse("static/index.html")
 
 if __name__ == "__main__":
     # Allows you to run the app by executing `python main.py` directly
